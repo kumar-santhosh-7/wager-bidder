@@ -3,8 +3,10 @@
 # Before the first run:
 # 1. Create a separate AWS account (not vibuthar-academy 649058762344)
 # 2. terraform -chdir=terraform init && terraform -chdir=terraform apply
-# 3. GitHub repo Settings → Secrets → Actions
-#      AWS_ROLE_ARN = terraform output -raw github_actions_role_arn
+# 3. GitHub repo Settings → Secrets and variables → Actions → Secrets
+#      AWS_ACCESS_KEY_ID     = terraform output -raw github_actions_access_key_id
+#      AWS_SECRET_ACCESS_KEY = terraform output -raw github_actions_secret_access_key
+#    Must be Secrets, not Variables. Remove AWS_ROLE_ARN if it is still set.
 
 name: Deploy to ECS
 
@@ -23,7 +25,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   AWS_REGION: ap-south-1
@@ -45,19 +46,21 @@ jobs:
       - name: Deploying ref
         run: echo "Deploying ${{ inputs.branch }} @ $(git rev-parse HEAD)"
 
-      - name: Require OIDC role
+      - name: Require AWS access key secrets
         env:
-          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          if [ -z "$AWS_ROLE_ARN" ]; then
-            echo "::error::Set repository secret AWS_ROLE_ARN to terraform output -raw github_actions_role_arn"
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::error::Set repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. Values: terraform output -raw github_actions_access_key_id and github_actions_secret_access_key"
             exit 1
           fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR

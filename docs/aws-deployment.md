@@ -18,7 +18,7 @@ Terraform refuses to apply if the caller identity is `649058762344`.
 Internet
    │
    ▼
-ALB (HTTP 80, optional HTTPS 443)
+ALB (HTTP 80 → HTTPS 443, host api.wager-game.online)
    │
    ▼
 ECS on EC2 (t3.micro)  →  Spring Boot :8090
@@ -26,7 +26,7 @@ ECS on EC2 (t3.micro)  →  Spring Boot :8090
    └── EFS  (/application/uploads)
 ```
 
-GitHub Actions authenticates with **OIDC** (no long-lived access keys).
+GitHub Actions authenticates with an IAM user access key (same pattern as vibuthar-academy).
 
 ## 1. New AWS account and CLI profile
 
@@ -68,7 +68,8 @@ terraform apply
 Save this output for GitHub:
 
 ```bash
-terraform output -raw github_actions_role_arn
+terraform output -raw github_actions_access_key_id
+terraform output -raw github_actions_secret_access_key
 terraform output -raw api_url
 ```
 
@@ -80,19 +81,20 @@ Repo **Settings → Secrets and variables → Actions → Secrets**:
 
 | Secret | Value |
 |---|---|
-| `AWS_ROLE_ARN` | `terraform output -raw github_actions_role_arn` |
+| `AWS_ACCESS_KEY_ID` | `terraform output -raw github_actions_access_key_id` |
+| `AWS_SECRET_ACCESS_KEY` | `terraform output -raw github_actions_secret_access_key` |
 
 Deploys only when you run **Actions → Deploy to ECS → Run workflow** and enter the branch name. Pushes do not deploy.
 
 ## 4. Point the Expo app at the API
 
 ```
-EXPO_PUBLIC_API_URL=http://<alb_dns_name>/api
+EXPO_PUBLIC_API_URL=https://api.wager-game.online/api
 ```
 
-Use `https://` after you attach an ACM certificate in `ap-south-1` and set `acm_certificate_arn`.
+HTTP on the ALB redirects to HTTPS. The 443 listener forwards `api.wager-game.online` to ECS and returns 503 for other hosts.
 
-Health check: `http://<alb_dns_name>/api/health`
+Health check: `https://api.wager-game.online/api/health`
 
 On an empty database, Terraform creates one admin from `admin_username` / `admin_password`. Demo users (`arun`, `meera`, …) are **not** created in prod.
 

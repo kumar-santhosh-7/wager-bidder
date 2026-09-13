@@ -31,16 +31,22 @@ output "alb_dns_name" {
 }
 
 output "api_url" {
-  value = local.enable_https ? "https://${aws_lb.app.dns_name}" : "http://${aws_lb.app.dns_name}"
+  value = local.api_url
 }
 
 output "health_url" {
-  value = "${local.enable_https ? "https" : "http"}://${aws_lb.app.dns_name}/api/health"
+  value = "${local.api_url}/api/health"
 }
 
-output "github_actions_role_arn" {
-  description = "GitHub Actions secret AWS_ROLE_ARN. Uses OIDC — do not create long-lived access keys."
-  value       = aws_iam_role.github_actions.arn
+output "github_actions_access_key_id" {
+  description = "GitHub Actions secret AWS_ACCESS_KEY_ID."
+  value       = aws_iam_access_key.github_actions.id
+}
+
+output "github_actions_secret_access_key" {
+  description = "GitHub Actions secret AWS_SECRET_ACCESS_KEY."
+  value       = aws_iam_access_key.github_actions.secret
+  sensitive   = true
 }
 
 output "ecs_autoscaling_group_name" {

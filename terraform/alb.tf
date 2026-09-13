@@ -64,11 +64,45 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.app.arn
   port              = 443
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  ssl_policy        = var.alb_ssl_policy
   certificate_arn   = var.acm_certificate_arn
 
   default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      status_code  = "503"
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "api_host" {
+  count = local.enable_https && var.api_hostname != "" ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 200
+
+  condition {
+    host_header {
+      values = [var.api_hostname]
+    }
+  }
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
+
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.app.arn
+        weight = 1
+      }
+
+      stickiness {
+        enabled  = false
+        duration = 3600
+      }
+    }
   }
 }

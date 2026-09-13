@@ -14,6 +14,9 @@ locals {
 
   enable_https = var.acm_certificate_arn != ""
 
+  api_host = var.api_hostname != "" ? var.api_hostname : aws_lb.app.dns_name
+  api_url  = local.enable_https ? "https://${local.api_host}" : "http://${local.api_host}"
+
   db_username = var.create_rds ? var.db_username : var.existing_db_username
   db_password = var.create_rds ? one(random_password.db[*].result) : var.existing_db_password
   db_url = var.create_rds ? format(
@@ -21,6 +24,4 @@ locals {
     one(aws_db_instance.app[*].address),
     var.db_name
   ) : var.existing_db_url
-
-  github_oidc_provider_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 }

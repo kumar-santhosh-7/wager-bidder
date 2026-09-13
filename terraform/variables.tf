@@ -124,9 +124,21 @@ variable "existing_db_password" {
 }
 
 variable "acm_certificate_arn" {
-  description = "Optional ACM certificate ARN in ap-south-1. Empty = HTTP only on port 80."
+  description = "ACM certificate ARN in ap-south-1. Empty = HTTP only on port 80."
   type        = string
-  default     = ""
+  default     = "arn:aws:acm:ap-south-1:701179922860:certificate/bfa8bee5-de80-48d8-8199-6f03a6d4210b"
+}
+
+variable "api_hostname" {
+  description = "Public API hostname. HTTPS listener forwards this host to the target group; other hosts get 503."
+  type        = string
+  default     = "api.wager-game.online"
+}
+
+variable "alb_ssl_policy" {
+  description = "ALB HTTPS SSL policy. Matches the listener created in the console."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 }
 
 variable "admin_username" {
@@ -146,16 +158,15 @@ variable "admin_name" {
   default = "House Admin"
 }
 
+# Unused. Kept so an existing terraform.tfvars still applies after OIDC was removed.
 variable "github_repository" {
-  description = "GitHub repo allowed to assume the deploy role, in owner/name form."
-  type        = string
-  default     = "kumar-santhosh-7/wager-bidder"
+  type    = string
+  default = "kumar-santhosh-7/wager-bidder"
 }
 
 variable "create_github_oidc_provider" {
-  description = "Create the GitHub OIDC provider in this account. Set false if one already exists."
-  type        = bool
-  default     = true
+  type    = bool
+  default = true
 }
 
 variable "spring_jpa_hibernate_ddl_auto" {

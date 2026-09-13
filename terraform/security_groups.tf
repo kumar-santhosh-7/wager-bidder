@@ -14,7 +14,6 @@ resource "aws_security_group" "alb" {
   dynamic "ingress" {
     for_each = local.enable_https ? [1] : []
     content {
-      description = "HTTPS"
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"

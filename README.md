@@ -7,7 +7,7 @@ Spring Boot API for the Ledger Bid mobile app. Hosted in a **dedicated AWS accou
 | Path | Purpose |
 |---|---|
 | `ledger-bid-api/` | Java 17 / Spring Boot 3.4 API, Dockerfile, local Compose |
-| `terraform/` | VPC, ALB, ECS on EC2, ECR, RDS MySQL, EFS uploads, GitHub OIDC (local state) |
+| `terraform/` | VPC, ALB, ECS on EC2, ECR, RDS MySQL, EFS uploads, GitHub Actions IAM user (local state) |
 | `.github/workflows/deploy-ecs.yml` | Build image, push ECR, deploy ECS |
 
 ## Local API
