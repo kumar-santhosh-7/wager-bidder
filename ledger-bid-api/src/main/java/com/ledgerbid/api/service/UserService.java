@@ -38,6 +38,7 @@ public class UserService {
         u.setCoins(req.coins());
         u.setWins(0);
         u.setLosses(0);
+        u.setActive(true);
         users.save(u);
         if (req.coins() > 0) {
             ids.ledger(u.getId(), LedgerType.CREDIT, req.coins(), "Opening balance");
@@ -55,5 +56,34 @@ public class UserService {
         users.save(user);
         String note = req.note() == null || req.note().isBlank() ? "Admin credit" : req.note().trim();
         ids.ledger(userId, LedgerType.CREDIT, req.amount(), note);
+    }
+
+    @Transactional
+    public void setActive(String actorId, String userId, boolean active) {
+        UserAccount user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Player not found"));
+        if (user.getRole() != Role.PLAYER) {
+            throw ApiException.bad("Only players can be activated or deactivated");
+        }
+        if (user.getId().equals(actorId)) {
+            throw ApiException.bad("You cannot change your own account status");
+        }
+        user.setActive(active);
+        users.save(user);
+        if (!active) {
+            auth.revokeUser(userId);
+        }
+    }
+
+    @Transactional
+    public void deletePlayer(String actorId, String userId) {
+        UserAccount user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Player not found"));
+        if (user.getRole() != Role.PLAYER) {
+            throw ApiException.bad("Only players can be deleted");
+        }
+        if (user.getId().equals(actorId)) {
+            throw ApiException.bad("You cannot delete your own account");
+        }
+        auth.revokeUser(userId);
+        users.delete(user);
     }
 }

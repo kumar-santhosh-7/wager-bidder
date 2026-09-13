@@ -139,6 +139,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         u.setCoins(coins);
         u.setWins(wins);
         u.setLosses(losses);
+        u.setActive(true);
         return u;
     }
 

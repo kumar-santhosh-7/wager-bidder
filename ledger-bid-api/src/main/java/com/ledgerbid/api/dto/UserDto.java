@@ -9,6 +9,7 @@ public record UserDto(
         Role role,
         int coins,
         int wins,
-        int losses
+        int losses,
+        boolean active
 ) {
 }

@@ -11,7 +11,7 @@ public final class Mappers {
     }
 
     public static UserDto user(UserAccount u) {
-        return new UserDto(u.getId(), u.getUsername(), u.getName(), u.getRole(), u.getCoins(), u.getWins(), u.getLosses());
+        return new UserDto(u.getId(), u.getUsername(), u.getName(), u.getRole(), u.getCoins(), u.getWins(), u.getLosses(), u.isActive());
     }
 
     public static RoundDto round(Round r) {

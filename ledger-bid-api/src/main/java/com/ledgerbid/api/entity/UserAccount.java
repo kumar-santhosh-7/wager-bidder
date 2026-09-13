@@ -38,4 +38,7 @@ public class UserAccount {
 
     @Column(nullable = false)
     private int losses;
+
+    @Column(nullable = false, columnDefinition = "tinyint(1) not null default 1")
+    private boolean active = true;
 }

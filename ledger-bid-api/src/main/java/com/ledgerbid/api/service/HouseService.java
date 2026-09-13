@@ -139,6 +139,9 @@ public class HouseService {
             throw ApiException.bad("Bidding has ended");
         }
         UserAccount player = users.findLockedById(actor.getId()).orElseThrow(() -> ApiException.unauthorized("Login as a player"));
+        if (!player.isActive()) {
+            throw ApiException.forbidden("Account is inactive");
+        }
         if (player.getCoins() < req.amount()) {
             throw ApiException.bad("Not enough coins");
         }
