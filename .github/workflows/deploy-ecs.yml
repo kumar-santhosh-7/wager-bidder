@@ -10,12 +10,12 @@ name: Deploy to ECS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "ledger-bid-api/**"
-      - ".github/workflows/deploy-ecs.yml"
+    inputs:
+      branch:
+        description: Branch to build and deploy
+        required: true
+        type: string
+        default: main
 
 concurrency:
   group: deploy-ecs-wager-bidder
@@ -39,6 +39,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Deploying ref
+        run: echo "Deploying ${{ inputs.branch }} @ $(git rev-parse HEAD)"
 
       - name: Require OIDC role
         env:

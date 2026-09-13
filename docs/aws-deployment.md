@@ -82,7 +82,7 @@ Repo **Settings → Secrets and variables → Actions → Secrets**:
 |---|---|
 | `AWS_ROLE_ARN` | `terraform output -raw github_actions_role_arn` |
 
-Push to `main` (or run **Deploy to ECS**). The workflow builds `ledger-bid-api/Dockerfile`, pushes to ECR, and updates ECS.
+Deploys only when you run **Actions → Deploy to ECS → Run workflow** and enter the branch name. Pushes do not deploy.
 
 ## 4. Point the Expo app at the API
 
