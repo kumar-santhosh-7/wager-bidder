@@ -1,0 +1,43 @@
+# Local MySQL 8 + Ledger Bid API.
+# MySQL 3306 is not published so it does not collide with XAMPP.
+#
+#   docker compose up --build
+#
+# API: http://localhost:8090/api/health
+
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ledger_bid
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ledger_bid?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      LEDGERBID_SEED: ${LEDGERBID_SEED:-true}
+      TZ: UTC
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

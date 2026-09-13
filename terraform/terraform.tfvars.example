@@ -1,0 +1,31 @@
+# Copy to terraform.tfvars (gitignored). Do not commit real secrets.
+# Apply this stack only in the dedicated wager-bidder AWS account.
+# Never use the vibuthar-academy account (649058762344) or its CLI profile.
+
+aws_region  = "ap-south-1"
+aws_profile = "wager-bidder"
+# allowed_account_ids = ["123456789012"] # new wager-bidder account ID
+
+project_name = "wager-bidder"
+environment  = "prod"
+
+# Initial admin created only when the database has no users.
+admin_username = "admin"
+admin_password = "replace-with-a-strong-password"
+admin_name     = "House Admin"
+
+github_repository           = "kumar-santhosh-7/wager-bidder"
+create_github_oidc_provider = true
+
+create_rds = true
+
+# Free Tier EC2 host. Bump to t3.small later if the API OOMs.
+ecs_instance_type = "t3.micro"
+ecs_cpu           = "512"
+ecs_memory        = "512"
+
+# Optional HTTPS. Empty = HTTP on port 80 only.
+# acm_certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/..."
+
+# First deploy creates tables. Switch to validate after the schema is stable.
+spring_jpa_hibernate_ddl_auto = "update"

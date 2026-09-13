@@ -44,3 +44,17 @@ The Expo app calls `http://<dev-machine>:8090/api`.
 - Phone on the same Wi-Fi: `http://YOUR_LAN_IP:8090/api` (set `EXPO_PUBLIC_API_URL` if auto-detect fails)
 
 Keep this API running whenever you use the mobile app.
+
+## 5. Docker (local)
+
+```bash
+docker compose up --build
+```
+
+Same health URL: http://localhost:8090/api/health
+
+MySQL stays on the Compose network (port 3306 is not published), so XAMPP MySQL can keep running on the host.
+
+## 6. AWS (separate account)
+
+Production hosting is **not** in the vibuthar-academy AWS account. See [docs/aws-deployment.md](../docs/aws-deployment.md).

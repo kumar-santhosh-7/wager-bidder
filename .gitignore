@@ -1,0 +1,8 @@
+.idea/
+.vscode/
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.log
+.env

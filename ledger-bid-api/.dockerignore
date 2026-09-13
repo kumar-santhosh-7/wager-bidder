@@ -1,0 +1,10 @@
+target
+.git
+.idea
+.vscode
+uploads
+*.md
+*.iml
+.env
+terraform
+.github

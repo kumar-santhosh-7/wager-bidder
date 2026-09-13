@@ -16,6 +16,9 @@ import com.ledgerbid.api.repo.RoundRepository;
 import com.ledgerbid.api.repo.SettingsRepository;
 import com.ledgerbid.api.repo.UserAccountRepository;
 import com.ledgerbid.api.service.AuthService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -24,12 +27,18 @@ import java.time.temporal.ChronoUnit;
 
 @Component
 public class DemoDataSeeder implements CommandLineRunner {
+    private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
+
     private final UserAccountRepository users;
     private final RoundRepository rounds;
     private final BidRepository bids;
     private final LedgerEntryRepository ledger;
     private final SettingsRepository settings;
     private final AuthService auth;
+    private final boolean seedDemo;
+    private final String adminUsername;
+    private final String adminPassword;
+    private final String adminName;
 
     public DemoDataSeeder(
             UserAccountRepository users,
@@ -37,7 +46,11 @@ public class DemoDataSeeder implements CommandLineRunner {
             BidRepository bids,
             LedgerEntryRepository ledger,
             SettingsRepository settings,
-            AuthService auth
+            AuthService auth,
+            @Value("${ledgerbid.seed:true}") boolean seedDemo,
+            @Value("${ledgerbid.admin.username:}") String adminUsername,
+            @Value("${ledgerbid.admin.password:}") String adminPassword,
+            @Value("${ledgerbid.admin.name:House Admin}") String adminName
     ) {
         this.users = users;
         this.rounds = rounds;
@@ -45,22 +58,53 @@ public class DemoDataSeeder implements CommandLineRunner {
         this.ledger = ledger;
         this.settings = settings;
         this.auth = auth;
+        this.seedDemo = seedDemo;
+        this.adminUsername = adminUsername;
+        this.adminPassword = adminPassword;
+        this.adminName = adminName;
     }
 
     @Override
     public void run(String... args) {
-        if (settings.count() == 0) {
-            Settings s = new Settings();
-            s.setId(1L);
-            s.setHouseEdge(0.08);
-            s.setMinBet(50);
-            s.setMaxBet(5000);
-            s.setMaintenance(false);
-            settings.save(s);
-        }
+        ensureSettings();
         if (users.count() > 0) {
             return;
         }
+        if (seedDemo) {
+            seedDemoData();
+            return;
+        }
+        if (!adminUsername.isBlank() && !adminPassword.isBlank()) {
+            users.save(user(
+                    "u-admin",
+                    adminUsername,
+                    auth.encoder().encode(adminPassword),
+                    adminName.isBlank() ? "House Admin" : adminName,
+                    Role.ADMIN,
+                    0,
+                    0,
+                    0
+            ));
+            log.info("Created initial admin user '{}'", adminUsername);
+            return;
+        }
+        log.warn("No users exist and demo seed is disabled. Set LEDGERBID_ADMIN_USERNAME and LEDGERBID_ADMIN_PASSWORD to create the first admin.");
+    }
+
+    private void ensureSettings() {
+        if (settings.count() > 0) {
+            return;
+        }
+        Settings s = new Settings();
+        s.setId(1L);
+        s.setHouseEdge(0.08);
+        s.setMinBet(50);
+        s.setMaxBet(5000);
+        s.setMaintenance(false);
+        settings.save(s);
+    }
+
+    private void seedDemoData() {
         Instant now = Instant.now();
         String hash1234 = auth.encoder().encode("1234");
         users.save(user("u-admin", "admin", auth.encoder().encode("admin123"), "House Admin", Role.ADMIN, 0, 0, 0));
