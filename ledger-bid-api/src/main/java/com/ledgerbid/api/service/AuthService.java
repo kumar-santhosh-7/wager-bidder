@@ -37,12 +37,20 @@ public class AuthService {
         if (!encoder.matches(password, user.getPasswordHash())) {
             throw ApiException.unauthorized("Invalid credentials");
         }
+        if (!user.isActive()) {
+            throw ApiException.forbidden("Account is inactive");
+        }
         AuthToken token = new AuthToken();
         token.setToken(UUID.randomUUID().toString().replace("-", ""));
         token.setUserId(user.getId());
         token.setCreatedAt(Instant.now());
         tokens.save(token);
         return new LoginResponse(token.getToken(), Mappers.user(user));
+    }
+
+    @Transactional
+    public void revokeUser(String userId) {
+        tokens.deleteByUserId(userId);
     }
 
     @Transactional
@@ -57,6 +65,10 @@ public class AuthService {
             throw ApiException.unauthorized("Login required");
         }
         AuthToken row = tokens.findById(token).orElseThrow(() -> ApiException.unauthorized("Session expired"));
-        return users.findById(row.getUserId()).orElseThrow(() -> ApiException.unauthorized("User not found"));
+        UserAccount user = users.findById(row.getUserId()).orElseThrow(() -> ApiException.unauthorized("User not found"));
+        if (!user.isActive()) {
+            throw ApiException.forbidden("Account is inactive");
+        }
+        return user;
     }
 }
