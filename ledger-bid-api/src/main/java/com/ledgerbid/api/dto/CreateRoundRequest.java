@@ -6,6 +6,7 @@ public record CreateRoundRequest(
         @NotBlank String optionA,
         @NotBlank String optionB,
         @NotBlank String endsAt,
+        String startsAt,
         String photoA,
         String photoB
 ) {

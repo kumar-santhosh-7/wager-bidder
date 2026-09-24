@@ -6,5 +6,6 @@ public enum BidStatus {
     WON,
     LOST,
     WITHDRAWN,
-    REJECTED
+    REJECTED,
+    DRAW
 }

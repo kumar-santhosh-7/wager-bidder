@@ -14,6 +14,7 @@ public record RoundDto(
         RoundStatus status,
         Side winner,
         Instant createdAt,
+        Instant startsAt,
         Instant endsAt,
         String photoA,
         String photoB

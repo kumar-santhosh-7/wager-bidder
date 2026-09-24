@@ -19,23 +19,27 @@ public class StateService {
     private final BidRepository bids;
     private final LedgerEntryRepository ledger;
     private final SettingsRepository settings;
+    private final HouseService house;
 
     public StateService(
             UserAccountRepository users,
             RoundRepository rounds,
             BidRepository bids,
             LedgerEntryRepository ledger,
-            SettingsRepository settings
+            SettingsRepository settings,
+            HouseService house
     ) {
         this.users = users;
         this.rounds = rounds;
         this.bids = bids;
         this.ledger = ledger;
         this.settings = settings;
+        this.house = house;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public BootstrapDto bootstrap(UserAccount me) {
+        house.promoteDueRounds();
         Settings s = settings.findById(1L).orElseThrow();
         return new BootstrapDto(
                 Mappers.user(me),
