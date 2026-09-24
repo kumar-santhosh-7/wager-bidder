@@ -42,6 +42,9 @@ public class Round {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "starts_at")
+    private Instant startsAt;
+
     @Column(name = "ends_at", nullable = false)
     private Instant endsAt;
 

@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class HouseService {
@@ -48,25 +49,71 @@ public class HouseService {
         this.withdrawLockMinutes = withdrawLockMinutes;
     }
 
+    public static double cutPercent(int lower, int higher) {
+        if (higher <= 0) {
+            return 0;
+        }
+        return (lower * 100.0) / higher;
+    }
+
+    public static int higherMemberCut(int amount, double cutPct) {
+        return (int) Math.round((amount / 100.0) * cutPct);
+    }
+
+    public static int higherMemberSurplus(int amount, double cutPct) {
+        return amount - higherMemberCut(amount, cutPct);
+    }
+
+    public static int settlePayout(int amount, Side side, Side winner, int poolA, int poolB) {
+        int higher = Math.max(poolA, poolB);
+        int lower = Math.min(poolA, poolB);
+        double pct = cutPercent(lower, higher);
+        boolean higherIsA = poolA >= poolB;
+        boolean isHigher = higherIsA ? side == Side.A : side == Side.B;
+        int cut = isHigher ? higherMemberCut(amount, pct) : 0;
+        int surplus = isHigher ? amount - cut : 0;
+        int potWin = side == winner ? (isHigher ? cut * 2 : amount * 2) : 0;
+        return surplus + potWin;
+    }
+
     public static double payoutMultiplier(int poolSide, int poolOther, double houseEdge) {
-        int total = poolSide + poolOther;
         if (poolSide <= 0) {
             return 0;
         }
-        return (total * (1 - houseEdge)) / poolSide;
+        if (poolSide >= poolOther) {
+            return 1 + ((double) poolOther / poolSide);
+        }
+        return 2;
+    }
+
+    private Instant parseInstant(String raw, String error) {
+        try {
+            return Instant.parse(raw);
+        } catch (Exception e) {
+            throw ApiException.bad(error);
+        }
     }
 
     private Instant parseFuture(String endsAt) {
-        Instant t;
-        try {
-            t = Instant.parse(endsAt);
-        } catch (Exception e) {
-            throw ApiException.bad("Invalid end time");
-        }
+        Instant t = parseInstant(endsAt, "Invalid end time");
         if (!t.isAfter(Instant.now())) {
             throw ApiException.bad("Set a bidding end time in the future");
         }
         return t;
+    }
+
+    @Transactional
+    public void promoteDueRounds() {
+        if (rounds.existsByStatus(RoundStatus.LIVE)) {
+            return;
+        }
+        List<Round> due = rounds.findByStatusAndStartsAtLessThanEqualOrderByStartsAtAsc(RoundStatus.UPCOMING, Instant.now());
+        if (due.isEmpty()) {
+            return;
+        }
+        Round next = due.get(0);
+        next.setStatus(RoundStatus.LIVE);
+        rounds.save(next);
     }
 
     private boolean biddingOpen(Round round) {
@@ -82,18 +129,31 @@ public class HouseService {
 
     @Transactional
     public void createRound(CreateRoundRequest req) {
-        if (rounds.existsByStatus(RoundStatus.LIVE)) {
-            throw ApiException.bad("A live round already exists");
+        Instant now = Instant.now();
+        Instant startsAt = now;
+        if (req.startsAt() != null && !req.startsAt().isBlank()) {
+            startsAt = parseInstant(req.startsAt(), "Invalid start time");
         }
-        Instant endsAt = parseFuture(req.endsAt());
+        Instant endsAt = parseInstant(req.endsAt(), "Invalid end time");
+        if (!endsAt.isAfter(startsAt)) {
+            throw ApiException.bad("End time must be after start time");
+        }
+        if (!endsAt.isAfter(now)) {
+            throw ApiException.bad("Set a bidding end time in the future");
+        }
+        boolean upcoming = startsAt.isAfter(now.plusSeconds(5));
+        if (!upcoming && rounds.existsByStatus(RoundStatus.LIVE)) {
+            throw ApiException.bad("A live round already exists. Schedule this as an upcoming match.");
+        }
         Round r = new Round();
         r.setId(ids.next("r"));
         r.setOptionA(req.optionA().trim());
         r.setOptionB(req.optionB().trim());
         r.setPoolA(0);
         r.setPoolB(0);
-        r.setStatus(RoundStatus.LIVE);
-        r.setCreatedAt(Instant.now());
+        r.setStatus(upcoming ? RoundStatus.UPCOMING : RoundStatus.LIVE);
+        r.setCreatedAt(now);
+        r.setStartsAt(startsAt);
         r.setEndsAt(endsAt);
         r.setPhotoA(blankToNull(req.photoA()));
         r.setPhotoB(blankToNull(req.photoB()));
@@ -130,6 +190,9 @@ public class HouseService {
         Settings settings = settingsService.current();
         if (settings.isMaintenance()) {
             throw ApiException.bad("House is in maintenance");
+        }
+        if (req.side() == Side.DRAW) {
+            throw ApiException.bad("Pick a side");
         }
         if (req.amount() < settings.getMinBet() || req.amount() > settings.getMaxBet()) {
             throw ApiException.bad("Bet must be " + settings.getMinBet() + "–" + settings.getMaxBet());
@@ -254,9 +317,6 @@ public class HouseService {
         if (round.getStatus() == RoundStatus.SETTLED) {
             throw ApiException.bad("Round already settled");
         }
-        Settings settings = settingsService.current();
-        double mA = payoutMultiplier(round.getPoolA(), round.getPoolB(), settings.getHouseEdge());
-        double mB = payoutMultiplier(round.getPoolB(), round.getPoolA(), settings.getHouseEdge());
         for (Bid bid : bids.findByRoundId(roundId)) {
             if (bid.getStatus() == BidStatus.REQUESTED) {
                 refundRequest(bid, round, "Bid request refunded · round settled · " + round.getOptionA() + " vs " + round.getOptionB());
@@ -267,8 +327,25 @@ public class HouseService {
             if (bid.getStatus() != BidStatus.PENDING) {
                 continue;
             }
+            if (winner == Side.DRAW) {
+                refundRequest(bid, round, "Draw refund · " + round.getOptionA() + " vs " + round.getOptionB());
+                bid.setStatus(BidStatus.DRAW);
+                bid.setPayout(bid.getAmount());
+                bids.save(bid);
+                continue;
+            }
             boolean won = bid.getSide() == winner;
-            int payout = won ? (int) Math.round(bid.getAmount() * (bid.getSide() == Side.A ? mA : mB)) : 0;
+            int poolA = round.getPoolA();
+            int poolB = round.getPoolB();
+            int higher = Math.max(poolA, poolB);
+            int lower = Math.min(poolA, poolB);
+            double pct = cutPercent(lower, higher);
+            boolean higherIsA = poolA >= poolB;
+            boolean isHigher = higherIsA ? bid.getSide() == Side.A : bid.getSide() == Side.B;
+            int cut = isHigher ? higherMemberCut(bid.getAmount(), pct) : 0;
+            int surplus = isHigher ? bid.getAmount() - cut : 0;
+            int potWin = won ? (isHigher ? cut * 2 : bid.getAmount() * 2) : 0;
+            int payout = surplus + potWin;
             bid.setStatus(won ? BidStatus.WON : BidStatus.LOST);
             bid.setPayout(payout);
             bids.save(bid);
@@ -276,15 +353,30 @@ public class HouseService {
             if (user == null) {
                 continue;
             }
+            if (surplus > 0) {
+                user.setCoins(user.getCoins() + surplus);
+                ids.ledger(
+                    user.getId(),
+                    LedgerType.CREDIT,
+                    surplus,
+                    "Unmatched coins returned · " + round.getOptionA() + " vs " + round.getOptionB()
+                );
+            }
+            if (potWin > 0) {
+                user.setCoins(user.getCoins() + potWin);
+                ids.ledger(
+                    user.getId(),
+                    LedgerType.PAYOUT,
+                    potWin,
+                    "Win payout · " + round.getOptionA() + " vs " + round.getOptionB()
+                );
+            }
             if (won) {
-                user.setCoins(user.getCoins() + payout);
                 user.setWins(user.getWins() + 1);
-                users.save(user);
-                ids.ledger(user.getId(), LedgerType.PAYOUT, payout, "Win payout · " + round.getOptionA() + " vs " + round.getOptionB());
             } else {
                 user.setLosses(user.getLosses() + 1);
-                users.save(user);
             }
+            users.save(user);
         }
         round.setStatus(RoundStatus.SETTLED);
         round.setWinner(winner);

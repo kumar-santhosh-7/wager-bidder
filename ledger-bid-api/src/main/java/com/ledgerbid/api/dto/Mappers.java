@@ -24,6 +24,7 @@ public final class Mappers {
                 r.getStatus(),
                 r.getWinner(),
                 r.getCreatedAt(),
+                r.getStartsAt(),
                 r.getEndsAt(),
                 r.getPhotoA(),
                 r.getPhotoB()
