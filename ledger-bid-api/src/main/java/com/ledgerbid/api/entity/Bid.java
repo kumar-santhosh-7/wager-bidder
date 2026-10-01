@@ -32,6 +32,9 @@ public class Bid {
     @Column(nullable = false)
     private int amount;
 
+    @Column(name = "matched_amount")
+    private Integer matchedAmount;
+
     @Column(nullable = false)
     private int payout;
 

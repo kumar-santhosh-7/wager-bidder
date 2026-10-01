@@ -48,6 +48,12 @@ public class Round {
     @Column(name = "ends_at", nullable = false)
     private Instant endsAt;
 
+    @Column(name = "bidding_closes_at")
+    private Instant biddingClosesAt;
+
+    @Column(name = "matched_at")
+    private Instant matchedAt;
+
     @Column(name = "photo_a", length = 500)
     private String photoA;
 

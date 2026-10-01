@@ -9,4 +9,6 @@ public interface BidRepository extends JpaRepository<Bid, String> {
     List<Bid> findAllByOrderByCreatedAtDesc();
 
     List<Bid> findByRoundId(String roundId);
+
+    void deleteByRoundId(String roundId);
 }

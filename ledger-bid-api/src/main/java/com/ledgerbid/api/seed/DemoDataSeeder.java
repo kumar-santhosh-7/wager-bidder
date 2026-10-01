@@ -109,7 +109,9 @@ public class DemoDataSeeder implements CommandLineRunner {
         r.setStatus(status);
         r.setWinner(winner);
         r.setCreatedAt(created);
+        r.setStartsAt(created);
         r.setEndsAt(ends);
+        r.setBiddingClosesAt(ends);
         return r;
     }
 

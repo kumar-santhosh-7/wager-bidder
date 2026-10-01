@@ -16,6 +16,8 @@ public interface RoundRepository extends JpaRepository<Round, String> {
 
     List<Round> findAllByOrderByCreatedAtDesc();
 
+    List<Round> findByStatus(RoundStatus status);
+
     List<Round> findByStatusAndStartsAtLessThanEqualOrderByStartsAtAsc(RoundStatus status, java.time.Instant at);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

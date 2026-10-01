@@ -1,6 +1,7 @@
 package com.ledgerbid.api.service;
 
 import com.ledgerbid.api.dto.CreateRoundRequest;
+import com.ledgerbid.api.dto.EndsAtRequest;
 import com.ledgerbid.api.dto.PlaceBidRequest;
 import com.ledgerbid.api.dto.PlaceBidResponse;
 import com.ledgerbid.api.entity.Bid;
@@ -32,6 +33,8 @@ public class HouseService {
     private final SettingsService settingsService;
     private final IdService ids;
     private final int withdrawLockMinutes;
+
+    public static final int MATCH_LOCK_HOURS = 1;
 
     public HouseService(
             RoundRepository rounds,
@@ -104,6 +107,7 @@ public class HouseService {
 
     @Transactional
     public void promoteDueRounds() {
+        freezeDueRounds();
         if (rounds.existsByStatus(RoundStatus.LIVE)) {
             return;
         }
@@ -116,15 +120,96 @@ public class HouseService {
         rounds.save(next);
     }
 
+    private Instant matchLockAt(Round round) {
+        Instant close = biddingCloseOf(round);
+        Instant start = round.getStartsAt() != null ? round.getStartsAt() : round.getCreatedAt();
+        Instant lockAt = close.minus(MATCH_LOCK_HOURS, ChronoUnit.HOURS);
+        return lockAt.isAfter(start) ? lockAt : close;
+    }
+
+    @Transactional
+    public void freezeDueRounds() {
+        Instant now = Instant.now();
+        for (Round round : rounds.findByStatus(RoundStatus.LIVE)) {
+            if (round.getMatchedAt() == null && (!now.isBefore(matchLockAt(round)) || !now.isBefore(biddingCloseOf(round)))) {
+                freezeRound(round);
+            }
+        }
+    }
+
+    private void freezeRound(Round round) {
+        if (round.getMatchedAt() != null) {
+            return;
+        }
+        int poolA = round.getPoolA();
+        int poolB = round.getPoolB();
+        double pct = cutPercent(Math.min(poolA, poolB), Math.max(poolA, poolB));
+        boolean higherIsA = poolA >= poolB;
+        int newA = 0;
+        int newB = 0;
+        for (Bid bid : bids.findByRoundId(round.getId())) {
+            if (bid.getStatus() == BidStatus.REQUESTED) {
+                refundRequest(bid, round, "Bid request refunded · match locked · " + round.getOptionA() + " vs " + round.getOptionB());
+                bid.setStatus(BidStatus.REJECTED);
+                bids.save(bid);
+                continue;
+            }
+            if (bid.getStatus() != BidStatus.PENDING) {
+                continue;
+            }
+            boolean isHigher = higherIsA ? bid.getSide() == Side.A : bid.getSide() == Side.B;
+            int cut = isHigher ? higherMemberCut(bid.getAmount(), pct) : bid.getAmount();
+            int surplus = isHigher ? bid.getAmount() - cut : 0;
+            bid.setMatchedAmount(cut);
+            bids.save(bid);
+            if (surplus > 0) {
+                UserAccount user = users.findLockedById(bid.getUserId()).orElse(null);
+                if (user != null) {
+                    user.setCoins(user.getCoins() + surplus);
+                    users.save(user);
+                    ids.ledger(
+                        user.getId(),
+                        LedgerType.CREDIT,
+                        surplus,
+                        "Unmatched coins returned 1 hour before bidding close · " + round.getOptionA() + " vs " + round.getOptionB()
+                    );
+                }
+            }
+            if (bid.getSide() == Side.A) {
+                newA += cut;
+            } else {
+                newB += cut;
+            }
+        }
+        round.setPoolA(newA);
+        round.setPoolB(newB);
+        round.setMatchedAt(Instant.now());
+        rounds.save(round);
+    }
+
+    private Instant biddingCloseOf(Round round) {
+        return round.getBiddingClosesAt() != null ? round.getBiddingClosesAt() : round.getEndsAt();
+    }
+
     private boolean biddingOpen(Round round) {
-        return round.getStatus() == RoundStatus.LIVE && round.getEndsAt().isAfter(Instant.now());
+        Instant now = Instant.now();
+        if (round.getStatus() != RoundStatus.LIVE || round.getMatchedAt() != null) {
+            return false;
+        }
+        if (round.getStartsAt() != null && now.isBefore(round.getStartsAt())) {
+            return false;
+        }
+        if (!now.isBefore(biddingCloseOf(round))) {
+            return false;
+        }
+        return now.isBefore(matchLockAt(round));
     }
 
     private boolean canWithdraw(Round round) {
-        if (round.getStatus() != RoundStatus.LIVE) {
+        if (!biddingOpen(round)) {
             return false;
         }
-        return Instant.now().plus(withdrawLockMinutes, ChronoUnit.MINUTES).isBefore(round.getEndsAt());
+        return Instant.now().plus(withdrawLockMinutes, ChronoUnit.MINUTES).isBefore(matchLockAt(round));
     }
 
     @Transactional
@@ -135,13 +220,26 @@ public class HouseService {
             startsAt = parseInstant(req.startsAt(), "Invalid start time");
         }
         Instant endsAt = parseInstant(req.endsAt(), "Invalid end time");
+        Instant biddingClosesAt = endsAt;
+        if (req.biddingClosesAt() != null && !req.biddingClosesAt().isBlank()) {
+            biddingClosesAt = parseInstant(req.biddingClosesAt(), "Invalid bidding close time");
+        }
         if (!endsAt.isAfter(startsAt)) {
             throw ApiException.bad("End time must be after start time");
         }
+        if (!biddingClosesAt.isAfter(startsAt)) {
+            throw ApiException.bad("Bidding close must be after start time");
+        }
+        if (biddingClosesAt.isAfter(endsAt)) {
+            throw ApiException.bad("Bidding close cannot be after match end");
+        }
         if (!endsAt.isAfter(now)) {
-            throw ApiException.bad("Set a bidding end time in the future");
+            throw ApiException.bad("Set a match end time in the future");
         }
         boolean upcoming = startsAt.isAfter(now.plusSeconds(5));
+        if (!upcoming && !biddingClosesAt.isAfter(now)) {
+            throw ApiException.bad("Set a bidding close time in the future");
+        }
         if (!upcoming && rounds.existsByStatus(RoundStatus.LIVE)) {
             throw ApiException.bad("A live round already exists. Schedule this as an upcoming match.");
         }
@@ -155,6 +253,7 @@ public class HouseService {
         r.setCreatedAt(now);
         r.setStartsAt(startsAt);
         r.setEndsAt(endsAt);
+        r.setBiddingClosesAt(biddingClosesAt);
         r.setPhotoA(blankToNull(req.photoA()));
         r.setPhotoB(blankToNull(req.photoB()));
         rounds.save(r);
@@ -173,12 +272,27 @@ public class HouseService {
     }
 
     @Transactional
-    public void setEndsAt(String roundId, String endsAtRaw) {
+    public void setEndsAt(String roundId, EndsAtRequest req) {
         Round round = rounds.findById(roundId).orElseThrow(() -> ApiException.notFound("Round not found"));
         if (round.getStatus() == RoundStatus.SETTLED) {
             throw ApiException.bad("Round already settled");
         }
-        round.setEndsAt(parseFuture(endsAtRaw));
+        if (round.getMatchedAt() != null) {
+            throw ApiException.bad("Match is locked. Leftover coins already returned.");
+        }
+        Instant endsAt = parseFuture(req.endsAt());
+        Instant closeAt = endsAt;
+        if (req.biddingClosesAt() != null && !req.biddingClosesAt().isBlank()) {
+            closeAt = parseInstant(req.biddingClosesAt(), "Invalid bidding close time");
+            if (!closeAt.isAfter(Instant.now())) {
+                throw ApiException.bad("Set a bidding close time in the future");
+            }
+        }
+        if (closeAt.isAfter(endsAt)) {
+            throw ApiException.bad("Bidding close cannot be after match end");
+        }
+        round.setEndsAt(endsAt);
+        round.setBiddingClosesAt(closeAt);
         rounds.save(round);
     }
 
@@ -198,8 +312,11 @@ public class HouseService {
             throw ApiException.bad("Bet must be " + settings.getMinBet() + "–" + settings.getMaxBet());
         }
         Round round = rounds.findLockedById(req.roundId()).orElseThrow(() -> ApiException.bad("Round is not live"));
+        if (round.getMatchedAt() == null && (!Instant.now().isBefore(matchLockAt(round)) || !Instant.now().isBefore(biddingCloseOf(round)))) {
+            freezeRound(round);
+        }
         if (round.getStatus() != RoundStatus.LIVE || !biddingOpen(round)) {
-            throw ApiException.bad("Bidding has ended");
+            throw ApiException.bad("Bidding has closed for this match");
         }
         UserAccount player = users.findLockedById(actor.getId()).orElseThrow(() -> ApiException.unauthorized("Login as a player"));
         if (!player.isActive()) {
@@ -237,8 +354,11 @@ public class HouseService {
             throw ApiException.bad("Only requested bids can be approved");
         }
         Round round = rounds.findLockedById(bid.getRoundId()).orElseThrow(() -> ApiException.bad("Round is not live"));
-        if (round.getStatus() != RoundStatus.LIVE) {
-            throw ApiException.bad("Round is locked");
+        if (round.getMatchedAt() == null && (!Instant.now().isBefore(matchLockAt(round)) || !Instant.now().isBefore(biddingCloseOf(round)))) {
+            freezeRound(round);
+        }
+        if (round.getStatus() != RoundStatus.LIVE || round.getMatchedAt() != null || !biddingOpen(round)) {
+            throw ApiException.bad("Bidding has closed for this match");
         }
         if (bid.getSide() == Side.A) {
             round.setPoolA(round.getPoolA() + bid.getAmount());
@@ -294,8 +414,8 @@ public class HouseService {
             ids.ledger(player.getId(), LedgerType.WITHDRAW, bid.getAmount(), "Cancelled bid request · " + round.getOptionA() + " vs " + round.getOptionB());
             return;
         }
-        if (!canWithdraw(round)) {
-            throw ApiException.bad("Withdraws close 5 minutes before bidding ends");
+        if (round.getMatchedAt() != null || !canWithdraw(round)) {
+            throw ApiException.bad("Withdraws close 1 hour before bidding ends, when leftover coins are returned");
         }
         UserAccount player = users.findLockedById(actor.getId()).orElseThrow();
         player.setCoins(player.getCoins() + bid.getAmount());
@@ -317,6 +437,15 @@ public class HouseService {
         if (round.getStatus() == RoundStatus.SETTLED) {
             throw ApiException.bad("Round already settled");
         }
+        Instant now = Instant.now();
+        if (winner != Side.DRAW) {
+            if (round.getMatchedAt() == null && now.isBefore(matchLockAt(round))) {
+                throw ApiException.bad("Leftover coins return 1 hour before bidding closes. Announce the winner after that.");
+            }
+            if (round.getMatchedAt() == null) {
+                freezeRound(round);
+            }
+        }
         for (Bid bid : bids.findByRoundId(roundId)) {
             if (bid.getStatus() == BidStatus.REQUESTED) {
                 refundRequest(bid, round, "Bid request refunded · round settled · " + round.getOptionA() + " vs " + round.getOptionB());
@@ -327,25 +456,19 @@ public class HouseService {
             if (bid.getStatus() != BidStatus.PENDING) {
                 continue;
             }
+            int stake = bid.getMatchedAmount() != null ? bid.getMatchedAmount() : bid.getAmount();
             if (winner == Side.DRAW) {
-                refundRequest(bid, round, "Draw refund · " + round.getOptionA() + " vs " + round.getOptionB());
+                UserAccount player = users.findLockedById(bid.getUserId()).orElseThrow(() -> ApiException.notFound("Player not found"));
+                player.setCoins(player.getCoins() + stake);
+                users.save(player);
+                ids.ledger(player.getId(), LedgerType.CREDIT, stake, "Draw refund · " + round.getOptionA() + " vs " + round.getOptionB());
                 bid.setStatus(BidStatus.DRAW);
-                bid.setPayout(bid.getAmount());
+                bid.setPayout(stake);
                 bids.save(bid);
                 continue;
             }
             boolean won = bid.getSide() == winner;
-            int poolA = round.getPoolA();
-            int poolB = round.getPoolB();
-            int higher = Math.max(poolA, poolB);
-            int lower = Math.min(poolA, poolB);
-            double pct = cutPercent(lower, higher);
-            boolean higherIsA = poolA >= poolB;
-            boolean isHigher = higherIsA ? bid.getSide() == Side.A : bid.getSide() == Side.B;
-            int cut = isHigher ? higherMemberCut(bid.getAmount(), pct) : 0;
-            int surplus = isHigher ? bid.getAmount() - cut : 0;
-            int potWin = won ? (isHigher ? cut * 2 : bid.getAmount() * 2) : 0;
-            int payout = surplus + potWin;
+            int payout = won ? stake * 2 : 0;
             bid.setStatus(won ? BidStatus.WON : BidStatus.LOST);
             bid.setPayout(payout);
             bids.save(bid);
@@ -353,21 +476,12 @@ public class HouseService {
             if (user == null) {
                 continue;
             }
-            if (surplus > 0) {
-                user.setCoins(user.getCoins() + surplus);
-                ids.ledger(
-                    user.getId(),
-                    LedgerType.CREDIT,
-                    surplus,
-                    "Unmatched coins returned · " + round.getOptionA() + " vs " + round.getOptionB()
-                );
-            }
-            if (potWin > 0) {
-                user.setCoins(user.getCoins() + potWin);
+            if (payout > 0) {
+                user.setCoins(user.getCoins() + payout);
                 ids.ledger(
                     user.getId(),
                     LedgerType.PAYOUT,
-                    potWin,
+                    payout,
                     "Win payout · " + round.getOptionA() + " vs " + round.getOptionB()
                 );
             }
@@ -381,6 +495,27 @@ public class HouseService {
         round.setStatus(RoundStatus.SETTLED);
         round.setWinner(winner);
         rounds.save(round);
+    }
+
+    @Transactional
+    public void deleteRound(String roundId) {
+        Round round = rounds.findLockedById(roundId).orElseThrow(() -> ApiException.notFound("Round not found"));
+        String label = round.getOptionA() + " vs " + round.getOptionB();
+        for (Bid bid : bids.findByRoundId(roundId)) {
+            if (bid.getStatus() == BidStatus.REQUESTED || bid.getStatus() == BidStatus.PENDING) {
+                int refund = bid.getMatchedAmount() != null ? bid.getMatchedAmount() : bid.getAmount();
+                if (refund > 0) {
+                    UserAccount player = users.findLockedById(bid.getUserId()).orElse(null);
+                    if (player != null) {
+                        player.setCoins(player.getCoins() + refund);
+                        users.save(player);
+                        ids.ledger(player.getId(), LedgerType.CREDIT, refund, "Match deleted · refund · " + label);
+                    }
+                }
+            }
+        }
+        bids.deleteByRoundId(roundId);
+        rounds.delete(round);
     }
 
     private String blankToNull(String value) {

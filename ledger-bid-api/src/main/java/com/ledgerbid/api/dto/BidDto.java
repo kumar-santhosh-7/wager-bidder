@@ -11,6 +11,7 @@ public record BidDto(
         String roundId,
         Side side,
         int amount,
+        Integer matchedAmount,
         int payout,
         BidStatus status,
         Instant createdAt
