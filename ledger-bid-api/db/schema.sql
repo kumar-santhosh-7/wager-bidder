@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS rounds (
   status VARCHAR(16) NOT NULL,
   winner VARCHAR(8) NULL,
   created_at DATETIME(3) NOT NULL,
+  starts_at DATETIME(3) NULL,
   ends_at DATETIME(3) NOT NULL,
+  bidding_closes_at DATETIME(3) NULL,
+  matched_at DATETIME(3) NULL,
   photo_a VARCHAR(500) NULL,
   photo_b VARCHAR(500) NULL
 );
@@ -33,6 +36,7 @@ CREATE TABLE IF NOT EXISTS bids (
   round_id VARCHAR(40) NOT NULL,
   side VARCHAR(8) NOT NULL,
   amount INT NOT NULL,
+  matched_amount INT NULL,
   payout INT NOT NULL DEFAULT 0,
   status VARCHAR(16) NOT NULL,
   created_at DATETIME(3) NOT NULL,

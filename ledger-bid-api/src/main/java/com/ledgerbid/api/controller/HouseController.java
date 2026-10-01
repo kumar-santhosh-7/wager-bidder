@@ -10,6 +10,7 @@ import com.ledgerbid.api.dto.SettleRequest;
 import com.ledgerbid.api.service.HouseService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,7 +38,7 @@ public class HouseController {
     @PostMapping("/rounds/{id}/ends-at")
     public Map<String, Boolean> setEndsAt(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody EndsAtRequest req) {
         WebConfig.admin(request);
-        house.setEndsAt(id, req.endsAt());
+        house.setEndsAt(id, req);
         return Map.of("ok", true);
     }
 
@@ -45,6 +46,13 @@ public class HouseController {
     public Map<String, Boolean> setPhotos(HttpServletRequest request, @PathVariable String id, @RequestBody PhotosRequest req) {
         WebConfig.admin(request);
         house.setPhotos(id, req.photoA(), req.photoB());
+        return Map.of("ok", true);
+    }
+
+    @DeleteMapping("/rounds/{id}")
+    public Map<String, Boolean> deleteRound(HttpServletRequest request, @PathVariable String id) {
+        WebConfig.admin(request);
+        house.deleteRound(id);
         return Map.of("ok", true);
     }
 

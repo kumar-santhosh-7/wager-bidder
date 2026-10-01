@@ -26,13 +26,15 @@ public final class Mappers {
                 r.getCreatedAt(),
                 r.getStartsAt(),
                 r.getEndsAt(),
+                r.getBiddingClosesAt(),
+                r.getMatchedAt(),
                 r.getPhotoA(),
                 r.getPhotoB()
         );
     }
 
     public static BidDto bid(Bid b) {
-        return new BidDto(b.getId(), b.getUserId(), b.getRoundId(), b.getSide(), b.getAmount(), b.getPayout(), b.getStatus(), b.getCreatedAt());
+        return new BidDto(b.getId(), b.getUserId(), b.getRoundId(), b.getSide(), b.getAmount(), b.getMatchedAmount(), b.getPayout(), b.getStatus(), b.getCreatedAt());
     }
 
     public static LedgerDto ledger(LedgerEntry e) {
