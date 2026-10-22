@@ -4,6 +4,7 @@ public record SettingsDto(
         double houseEdge,
         int minBet,
         int maxBet,
-        boolean maintenance
+        boolean maintenance,
+        String homeDescription
 ) {
 }

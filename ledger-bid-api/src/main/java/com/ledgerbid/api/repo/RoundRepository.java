@@ -14,6 +14,8 @@ import java.util.Optional;
 public interface RoundRepository extends JpaRepository<Round, String> {
     boolean existsByStatus(RoundStatus status);
 
+    boolean existsByStatusAndIdNot(RoundStatus status, String id);
+
     List<Round> findAllByOrderByCreatedAtDesc();
 
     List<Round> findByStatus(RoundStatus status);

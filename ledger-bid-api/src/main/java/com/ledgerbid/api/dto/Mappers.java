@@ -29,7 +29,10 @@ public final class Mappers {
                 r.getBiddingClosesAt(),
                 r.getMatchedAt(),
                 r.getPhotoA(),
-                r.getPhotoB()
+                r.getPhotoB(),
+                r.getDescription(),
+                r.getDescriptionA(),
+                r.getDescriptionB()
         );
     }
 
@@ -42,6 +45,6 @@ public final class Mappers {
     }
 
     public static SettingsDto settings(Settings s) {
-        return new SettingsDto(s.getHouseEdge(), s.getMinBet(), s.getMaxBet(), s.isMaintenance());
+        return new SettingsDto(s.getHouseEdge(), s.getMinBet(), s.getMaxBet(), s.isMaintenance(), s.getHomeDescription());
     }
 }

@@ -26,4 +26,7 @@ public class Settings {
 
     @Column(nullable = false)
     private boolean maintenance;
+
+    @Column(name = "home_description", length = 500)
+    private String homeDescription;
 }

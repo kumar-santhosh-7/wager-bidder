@@ -59,4 +59,13 @@ public class Round {
 
     @Column(name = "photo_b", length = 500)
     private String photoB;
+
+    @Column(name = "description", length = 500)
+    private String description;
+
+    @Column(name = "description_a", length = 500)
+    private String descriptionA;
+
+    @Column(name = "description_b", length = 500)
+    private String descriptionB;
 }

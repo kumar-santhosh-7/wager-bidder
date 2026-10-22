@@ -45,7 +45,7 @@ public class HouseController {
     @PostMapping("/rounds/{id}/photos")
     public Map<String, Boolean> setPhotos(HttpServletRequest request, @PathVariable String id, @RequestBody PhotosRequest req) {
         WebConfig.admin(request);
-        house.setPhotos(id, req.photoA(), req.photoB());
+        house.setPhotos(id, req.photoA(), req.photoB(), req.description(), req.descriptionA(), req.descriptionB());
         return Map.of("ok", true);
     }
 

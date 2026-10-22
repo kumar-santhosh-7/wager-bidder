@@ -256,17 +256,29 @@ public class HouseService {
         r.setBiddingClosesAt(biddingClosesAt);
         r.setPhotoA(blankToNull(req.photoA()));
         r.setPhotoB(blankToNull(req.photoB()));
+        r.setDescription(blankToNull(req.description()));
+        r.setDescriptionA(blankToNull(req.descriptionA()));
+        r.setDescriptionB(blankToNull(req.descriptionB()));
         rounds.save(r);
     }
 
     @Transactional
-    public void setPhotos(String roundId, String photoA, String photoB) {
+    public void setPhotos(String roundId, String photoA, String photoB, String description, String descriptionA, String descriptionB) {
         Round round = rounds.findById(roundId).orElseThrow(() -> ApiException.notFound("Round not found"));
         if (photoA != null) {
             round.setPhotoA(blankToNull(photoA));
         }
         if (photoB != null) {
             round.setPhotoB(blankToNull(photoB));
+        }
+        if (description != null) {
+            round.setDescription(blankToNull(description));
+        }
+        if (descriptionA != null) {
+            round.setDescriptionA(blankToNull(descriptionA));
+        }
+        if (descriptionB != null) {
+            round.setDescriptionB(blankToNull(descriptionB));
         }
         rounds.save(round);
     }
@@ -277,20 +289,35 @@ public class HouseService {
         if (round.getStatus() == RoundStatus.SETTLED) {
             throw ApiException.bad("Round already settled");
         }
-        if (round.getMatchedAt() != null) {
-            throw ApiException.bad("Match is locked. Leftover coins already returned.");
+        Instant now = Instant.now();
+        Instant startsAt = round.getStartsAt() != null ? round.getStartsAt() : round.getCreatedAt();
+        if (req.startsAt() != null && !req.startsAt().isBlank()) {
+            startsAt = parseInstant(req.startsAt(), "Invalid start time");
         }
-        Instant endsAt = parseFuture(req.endsAt());
+        Instant endsAt = parseInstant(req.endsAt(), "Invalid end time");
         Instant closeAt = endsAt;
         if (req.biddingClosesAt() != null && !req.biddingClosesAt().isBlank()) {
             closeAt = parseInstant(req.biddingClosesAt(), "Invalid bidding close time");
-            if (!closeAt.isAfter(Instant.now())) {
-                throw ApiException.bad("Set a bidding close time in the future");
-            }
+        }
+        if (!endsAt.isAfter(startsAt)) {
+            throw ApiException.bad("Match end must be after start time");
+        }
+        if (!closeAt.isAfter(startsAt)) {
+            throw ApiException.bad("Bidding close must be after start time");
         }
         if (closeAt.isAfter(endsAt)) {
             throw ApiException.bad("Bidding close cannot be after match end");
         }
+        boolean upcomingStart = startsAt.isAfter(now.plusSeconds(5));
+        if (upcomingStart) {
+            round.setStatus(RoundStatus.UPCOMING);
+        } else {
+            if (round.getStatus() != RoundStatus.LIVE && rounds.existsByStatusAndIdNot(RoundStatus.LIVE, roundId)) {
+                throw ApiException.bad("A live round already exists. Keep this match upcoming.");
+            }
+            round.setStatus(RoundStatus.LIVE);
+        }
+        round.setStartsAt(startsAt);
         round.setEndsAt(endsAt);
         round.setBiddingClosesAt(closeAt);
         rounds.save(round);

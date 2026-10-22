@@ -19,6 +19,9 @@ public record RoundDto(
         Instant biddingClosesAt,
         Instant matchedAt,
         String photoA,
-        String photoB
+        String photoB,
+        String description,
+        String descriptionA,
+        String descriptionB
 ) {
 }

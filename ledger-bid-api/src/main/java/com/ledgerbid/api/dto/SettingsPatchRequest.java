@@ -4,6 +4,7 @@ public record SettingsPatchRequest(
         Double houseEdge,
         Integer minBet,
         Integer maxBet,
-        Boolean maintenance
+        Boolean maintenance,
+        String homeDescription
 ) {
 }

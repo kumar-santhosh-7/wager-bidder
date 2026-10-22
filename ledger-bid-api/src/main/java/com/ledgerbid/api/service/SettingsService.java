@@ -35,6 +35,10 @@ public class SettingsService {
         if (req.maintenance() != null) {
             s.setMaintenance(req.maintenance());
         }
+        if (req.homeDescription() != null) {
+            String text = req.homeDescription().trim();
+            s.setHomeDescription(text.isEmpty() ? null : text);
+        }
         return Mappers.settings(settings.save(s));
     }
 }

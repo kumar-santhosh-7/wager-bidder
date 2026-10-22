@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS rounds (
   bidding_closes_at DATETIME(3) NULL,
   matched_at DATETIME(3) NULL,
   photo_a VARCHAR(500) NULL,
-  photo_b VARCHAR(500) NULL
+  photo_b VARCHAR(500) NULL,
+  description VARCHAR(500) NULL,
+  description_a VARCHAR(500) NULL,
+  description_b VARCHAR(500) NULL
 );
 
 CREATE TABLE IF NOT EXISTS bids (

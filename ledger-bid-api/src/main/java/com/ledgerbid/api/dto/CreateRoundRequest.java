@@ -9,6 +9,9 @@ public record CreateRoundRequest(
         String startsAt,
         String biddingClosesAt,
         String photoA,
-        String photoB
+        String photoB,
+        String description,
+        String descriptionA,
+        String descriptionB
 ) {
 }
