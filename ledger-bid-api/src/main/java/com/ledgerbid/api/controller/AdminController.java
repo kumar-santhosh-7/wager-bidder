@@ -44,6 +44,13 @@ public class AdminController {
         return Map.of("ok", true);
     }
 
+    @PostMapping("/users/{id}/debit")
+    public Map<String, Boolean> debit(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody CreditRequest req) {
+        WebConfig.admin(request);
+        users.debit(id, req);
+        return Map.of("ok", true);
+    }
+
     @PatchMapping("/users/{id}/active")
     public Map<String, Boolean> setActive(HttpServletRequest request, @PathVariable String id, @RequestBody UserActiveRequest req) {
         WebConfig.admin(request);

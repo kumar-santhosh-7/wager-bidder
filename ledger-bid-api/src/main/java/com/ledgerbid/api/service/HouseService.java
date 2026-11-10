@@ -256,9 +256,9 @@ public class HouseService {
         r.setBiddingClosesAt(biddingClosesAt);
         r.setPhotoA(blankToNull(req.photoA()));
         r.setPhotoB(blankToNull(req.photoB()));
-        r.setDescription(blankToNull(req.description()));
-        r.setDescriptionA(blankToNull(req.descriptionA()));
-        r.setDescriptionB(blankToNull(req.descriptionB()));
+        r.setDescription(cleanDescription(req.description(), "Match description"));
+        r.setDescriptionA(cleanDescription(req.descriptionA(), "Description A"));
+        r.setDescriptionB(cleanDescription(req.descriptionB(), "Description B"));
         rounds.save(r);
     }
 
@@ -272,13 +272,13 @@ public class HouseService {
             round.setPhotoB(blankToNull(photoB));
         }
         if (description != null) {
-            round.setDescription(blankToNull(description));
+            round.setDescription(cleanDescription(description, "Match description"));
         }
         if (descriptionA != null) {
-            round.setDescriptionA(blankToNull(descriptionA));
+            round.setDescriptionA(cleanDescription(descriptionA, "Description A"));
         }
         if (descriptionB != null) {
-            round.setDescriptionB(blankToNull(descriptionB));
+            round.setDescriptionB(cleanDescription(descriptionB, "Description B"));
         }
         rounds.save(round);
     }
@@ -551,5 +551,15 @@ public class HouseService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static final int MAX_DESCRIPTION = 500;
+
+    private String cleanDescription(String value, String label) {
+        String text = blankToNull(value);
+        if (text != null && text.length() > MAX_DESCRIPTION) {
+            throw ApiException.bad(label + " must be " + MAX_DESCRIPTION + " characters or less");
+        }
+        return text;
     }
 }
