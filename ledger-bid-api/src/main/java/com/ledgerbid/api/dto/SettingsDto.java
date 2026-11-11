@@ -5,6 +5,8 @@ public record SettingsDto(
         int minBet,
         int maxBet,
         boolean maintenance,
-        String homeDescription
+        String homeDescription,
+        double winnerFeePct,
+        double drawFeePct
 ) {
 }

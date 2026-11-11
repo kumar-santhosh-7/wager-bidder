@@ -5,6 +5,8 @@ public record SettingsPatchRequest(
         Integer minBet,
         Integer maxBet,
         Boolean maintenance,
-        String homeDescription
+        String homeDescription,
+        Double winnerFeePct,
+        Double drawFeePct
 ) {
 }

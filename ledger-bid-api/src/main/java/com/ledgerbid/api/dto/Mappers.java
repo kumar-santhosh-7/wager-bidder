@@ -45,6 +45,6 @@ public final class Mappers {
     }
 
     public static SettingsDto settings(Settings s) {
-        return new SettingsDto(s.getHouseEdge(), s.getMinBet(), s.getMaxBet(), s.isMaintenance(), s.getHomeDescription());
+        return new SettingsDto(s.getHouseEdge(), s.getMinBet(), s.getMaxBet(), s.isMaintenance(), s.getHomeDescription(), s.getWinnerFeePct(), s.getDrawFeePct());
     }
 }
