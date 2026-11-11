@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS settings (
   house_edge DOUBLE NOT NULL,
   min_bet INT NOT NULL,
   max_bet INT NOT NULL,
-  maintenance TINYINT(1) NOT NULL
+  maintenance TINYINT(1) NOT NULL,
+  home_description VARCHAR(500) NULL,
+  winner_fee_pct DOUBLE NOT NULL DEFAULT 0,
+  draw_fee_pct DOUBLE NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (

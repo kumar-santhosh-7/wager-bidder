@@ -256,9 +256,9 @@ public class HouseService {
         r.setBiddingClosesAt(biddingClosesAt);
         r.setPhotoA(blankToNull(req.photoA()));
         r.setPhotoB(blankToNull(req.photoB()));
-        r.setDescription(blankToNull(req.description()));
-        r.setDescriptionA(blankToNull(req.descriptionA()));
-        r.setDescriptionB(blankToNull(req.descriptionB()));
+        r.setDescription(cleanDescription(req.description(), "Match description"));
+        r.setDescriptionA(cleanDescription(req.descriptionA(), "Description A"));
+        r.setDescriptionB(cleanDescription(req.descriptionB(), "Description B"));
         rounds.save(r);
     }
 
@@ -272,13 +272,13 @@ public class HouseService {
             round.setPhotoB(blankToNull(photoB));
         }
         if (description != null) {
-            round.setDescription(blankToNull(description));
+            round.setDescription(cleanDescription(description, "Match description"));
         }
         if (descriptionA != null) {
-            round.setDescriptionA(blankToNull(descriptionA));
+            round.setDescriptionA(cleanDescription(descriptionA, "Description A"));
         }
         if (descriptionB != null) {
-            round.setDescriptionB(blankToNull(descriptionB));
+            round.setDescriptionB(cleanDescription(descriptionB, "Description B"));
         }
         rounds.save(round);
     }
@@ -473,6 +473,8 @@ public class HouseService {
                 freezeRound(round);
             }
         }
+        Settings fees = settingsService.current();
+        String label = round.getOptionA() + " vs " + round.getOptionB();
         for (Bid bid : bids.findByRoundId(roundId)) {
             if (bid.getStatus() == BidStatus.REQUESTED) {
                 refundRequest(bid, round, "Bid request refunded · round settled · " + round.getOptionA() + " vs " + round.getOptionB());
@@ -486,31 +488,34 @@ public class HouseService {
             int stake = bid.getMatchedAmount() != null ? bid.getMatchedAmount() : bid.getAmount();
             if (winner == Side.DRAW) {
                 UserAccount player = users.findLockedById(bid.getUserId()).orElseThrow(() -> ApiException.notFound("Player not found"));
-                player.setCoins(player.getCoins() + stake);
+                int drawFee = feeOf(stake, fees.getDrawFeePct());
+                player.setCoins(player.getCoins() + stake - drawFee);
                 users.save(player);
-                ids.ledger(player.getId(), LedgerType.CREDIT, stake, "Draw refund · " + round.getOptionA() + " vs " + round.getOptionB());
+                ids.ledger(player.getId(), LedgerType.CREDIT, stake, "Draw refund · " + label);
+                if (drawFee > 0) {
+                    ids.ledger(player.getId(), LedgerType.DEBIT, -drawFee, "Draw fee " + formatPct(fees.getDrawFeePct()) + "% · " + label);
+                }
                 bid.setStatus(BidStatus.DRAW);
-                bid.setPayout(stake);
+                bid.setPayout(stake - drawFee);
                 bids.save(bid);
                 continue;
             }
             boolean won = bid.getSide() == winner;
             int payout = won ? stake * 2 : 0;
+            int winnerFee = won ? feeOf(payout, fees.getWinnerFeePct()) : 0;
             bid.setStatus(won ? BidStatus.WON : BidStatus.LOST);
-            bid.setPayout(payout);
+            bid.setPayout(payout - winnerFee);
             bids.save(bid);
             UserAccount user = users.findLockedById(bid.getUserId()).orElse(null);
             if (user == null) {
                 continue;
             }
             if (payout > 0) {
-                user.setCoins(user.getCoins() + payout);
-                ids.ledger(
-                    user.getId(),
-                    LedgerType.PAYOUT,
-                    payout,
-                    "Win payout · " + round.getOptionA() + " vs " + round.getOptionB()
-                );
+                user.setCoins(user.getCoins() + payout - winnerFee);
+                ids.ledger(user.getId(), LedgerType.PAYOUT, payout, "Win payout · " + label);
+                if (winnerFee > 0) {
+                    ids.ledger(user.getId(), LedgerType.DEBIT, -winnerFee, "Winner fee " + formatPct(fees.getWinnerFeePct()) + "% · " + label);
+                }
             }
             if (won) {
                 user.setWins(user.getWins() + 1);
@@ -545,11 +550,33 @@ public class HouseService {
         rounds.delete(round);
     }
 
+    /** Coins taken for a percentage fee, rounded to the nearest coin and never more than the amount. */
+    static int feeOf(int amount, double pct) {
+        if (amount <= 0 || pct <= 0) {
+            return 0;
+        }
+        return (int) Math.min(amount, Math.round(amount * pct / 100.0));
+    }
+
+    private static String formatPct(double pct) {
+        return pct == Math.rint(pct) ? String.valueOf((long) pct) : String.valueOf(pct);
+    }
+
     private String blankToNull(String value) {
         if (value == null) {
             return null;
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static final int MAX_DESCRIPTION = 500;
+
+    private String cleanDescription(String value, String label) {
+        String text = blankToNull(value);
+        if (text != null && text.length() > MAX_DESCRIPTION) {
+            throw ApiException.bad(label + " must be " + MAX_DESCRIPTION + " characters or less");
+        }
+        return text;
     }
 }

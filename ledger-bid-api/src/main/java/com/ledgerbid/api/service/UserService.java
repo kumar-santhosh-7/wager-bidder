@@ -59,6 +59,21 @@ public class UserService {
     }
 
     @Transactional
+    public void debit(String userId, CreditRequest req) {
+        UserAccount user = users.findLockedById(userId).orElseThrow(() -> ApiException.notFound("Player not found"));
+        if (user.getRole() != Role.PLAYER) {
+            throw ApiException.bad("Player not found");
+        }
+        if (req.amount() > user.getCoins()) {
+            throw ApiException.bad("Player only has " + user.getCoins() + " coins");
+        }
+        user.setCoins(user.getCoins() - req.amount());
+        users.save(user);
+        String note = req.note() == null || req.note().isBlank() ? "Admin debit" : req.note().trim();
+        ids.ledger(userId, LedgerType.DEBIT, -req.amount(), note);
+    }
+
+    @Transactional
     public void setActive(String actorId, String userId, boolean active) {
         UserAccount user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Player not found"));
         if (user.getRole() != Role.PLAYER) {
